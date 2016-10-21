@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+ROOTDIR=$(readlink -f `dirname $0`)
+RELTYPE=$1
+AVAIL_VERSION=$2
+REL=${3:-1}
+EXTRA_DESC=$4
+
+cd $ROOTDIR
+. $RELTYPE/vars
+
+./fetch-openssl
+
+cd $ROOTDIR/$RELTYPE
+rm -rf build
+mkdir -p build
+cd build
+SRCDIR=$ROOTDIR/$RELTYPE/build/$(apt-get source nginx=$AVAIL_VERSION 2>&1 | grep 'extracting nginx in' | sed 's/^.*nginx in //')
+cd $ROOTDIR/$RELTYPE
+
+set -e
+cat changelog.tmpl | sed -e "s/%EXTRA_DESC%/$EXTRA_DESC/" -e "s/%REL%/$REL/" -e "s/%VERSION%/$AVAIL_VERSION/" -e "s/%DATE%/$(date -R)/" > $SRCDIR/debian/changelog
+cat changelog.last >> $SRCDIR/debian/changelog
+mv $SRCDIR/debian/changelog $SRCDIR/debian.changelog
+rm -rf $SRCDIR/debian
+cp -R $ROOTDIR/$RELTYPE/debian $SRCDIR/
+mv $SRCDIR/debian.changelog $SRCDIR/debian/changelog
+ln $ROOTDIR/openssl-latest.tar.gz $SRCDIR/../nginx_${AVAIL_VERSION}.orig-openssl.tar.gz
+cp -R ../openssl $SRCDIR/openssl
+sed -i 's/^.*libssl-dev.*\n//' $SRCDIR/debian/control
+sed -i -e 's/^WITH_HTTP2/#/' -e 's/$(WITH_HTTP2)/--with-http_v2_module --with-openssl=openssl/' $SRCDIR/debian/rules
+
+cd $SRCDIR
+debuild -S -sa
+cd ..
+dput $PPA $(ls -1 nginx*_source.changes)
+
+cd $ROOTDIR
+cp $SRCDIR/debian/changelog $ROOTDIR/$RELTYPE/changelog.last
+echo $AVAIL_VERSION > $RELTYPE/version

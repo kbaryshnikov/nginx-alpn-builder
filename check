@@ -1,0 +1,24 @@
+#!/bin/sh
+
+ROOTDIR=$(readlink -f `dirname $0`)
+RELTYPE=$1
+
+cd $ROOTDIR
+. $RELTYPE/vars
+
+sudo /usr/bin/apt-get update --quiet
+
+LAST_BUILT_VERSION=$(cat $RELTYPE/version)
+AVAIL_VERSION=$(apt-cache madison nginx | grep $MADISON_GREP | cut -d '|' -f 2 | sed -e 's/^ *//' -e 's/-[0-9]*~trusty *//' | sort -rV | uniq | head -1)
+echo Last built version: [$LAST_BUILT_VERSION]
+echo Available version: [$AVAIL_VERSION]
+
+NEW_VERSION_AVAILABLE=
+dpkg --compare-versions $LAST_BUILT_VERSION lt $AVAIL_VERSION && NEW_VERSION_AVAILABLE=1
+
+if [ -z $NEW_VERSION_AVAILABLE ]; then
+	echo No new version available
+	exit
+fi
+
+./build $RELTYPE $AVAIL_VERSION

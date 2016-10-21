@@ -1,0 +1,46 @@
+#!/bin/sh
+
+FTPSRC="ftp://ftp.openssl.org/source/"
+OPENSSL_VERSION="openssl-1.1.0"
+BUILDDIR=openssl-tmp
+TARGETDIR=openssl
+
+LATEST_FILE=$(curl $FTPSRC 2>/dev/null | egrep "$OPENSSL_VERSION([a-z]*).tar.gz\$" | tail -1 | awk '{print $(NF)}')
+if [ $? -ne 0 ]; then
+    echo "Cannot download OpenSSL files list from $FTPSRC"
+    exit 1
+fi
+
+if [ -z $LATEST_FILE ]; then
+    echo "Cannot determine latest OpenSSL version from $FTPSRC"
+    exit 1
+fi
+
+if [ -f openssl-latest ] ; then
+	CURRENT_LATEST=$(cat openssl-latest)
+	if [ "$CURRENT_LATEST" = "$LATEST_FILE" ] ; then
+		echo OpenSSL: No updates
+		exit
+	fi
+fi
+
+echo OpenSSL: Fetching $LATEST_FILE from $FTPSRC
+
+# Clean target dir
+rm -rf $BUILDDIR
+mkdir -p $BUILDDIR
+
+wget -qO $BUILDDIR/openssl-latest.tar.gz $FTPSRC$LATEST_FILE
+if [ $? -ne 0 ]; then
+    echo "OpenSSL: Cannot download OpenSSL from $FTPSRC$LATEST_FILE"
+    exit 1
+fi
+
+tar -xz -f $BUILDDIR/openssl-latest.tar.gz -C $BUILDDIR
+LATEST_DIR=$(ls -1Ad "$BUILDDIR/$OPENSSL_VERSION"*)
+rm -rf $TARGETDIR
+mv $LATEST_DIR $TARGETDIR
+mv $BUILDDIR/openssl-latest.tar.gz openssl-latest.tar.gz
+rm -rf $BUILDDIR
+echo -n $LATEST_FILE > openssl-latest
+echo "OpenSSL updated: downloaded as $LATEST_FILE and unpacked to $TARGETDIR"
